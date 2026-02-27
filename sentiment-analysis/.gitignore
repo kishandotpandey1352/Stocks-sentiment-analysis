@@ -1,0 +1,15 @@
+# Node
+node_modules/
+
+# Python virtual environments
+sentiment-env/
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS junk
+.DS_Store
+Thumbs.db

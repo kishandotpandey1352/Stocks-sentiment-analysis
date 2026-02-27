@@ -1,0 +1,366 @@
+<section class="sentiment-panel">
+  <div
+    class="sentiment-loading"
+    *ngIf="
+      (sentimentLoading && (selectedMode === 'dashboard' || selectedMode === 'single')) ||
+      (batchLoading && (selectedMode === 'batch' || selectedMode === 'report'))
+    "
+  >
+    <div class="sentiment-loading-backdrop"></div>
+    <div class="sentiment-loading-card" role="status" aria-live="polite">
+      <div class="spinner"></div>
+      <div class="loading-title">Analyzing markets</div>
+      <div class="loading-subtitle">Crunching signals and sentiment streams...</div>
+    </div>
+  </div>
+
+  <div
+    class="sentiment-hero"
+    [class.collapsed]="!showIntroDetails"
+    (mouseenter)="showIntroDetailsOnHover()"
+  >
+    <div class="sentiment-hero-header">
+      <div>
+        <div class="sentiment-subtitle">
+          Analyze market sentiment for US tickers with signal scores, trend charts, and curated news.
+        </div>
+      </div>
+      <button class="hero-close" (click)="hideIntroDetails()" aria-label="Hide details">x</button>
+    </div>
+    <div class="sentiment-bullets" *ngIf="showIntroDetails">
+      <span>Current coverage: US equities (NYSE/Nasdaq)</span>
+      <span>International exchanges coming soon</span>
+      <span>News + price signals for supported tickers</span>
+      <span>More asset classes planned</span>
+    </div>
+    <div class="hero-hint" *ngIf="!showIntroDetails">Hover to show full description</div>
+  </div>
+
+  <div class="sentiment-header" *ngIf="selectedMode === 'dashboard' || selectedMode === 'single'">
+    <div>
+    </div>
+    <div class="sentiment-actions">
+      <button class="ghost" *ngIf="sentimentData" (click)="downloadAnalysisPdf()">
+        Download PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="sentiment-controls">
+    <div class="ticker-action-row" *ngIf="selectedMode === 'dashboard' || selectedMode === 'single'">
+      <label class="ticker-label">
+        Ticker
+        <div class="ticker-field">
+          <input
+            class="sentiment-input"
+            [ngModel]="sentimentTicker"
+            (ngModelChange)="onSentimentTickerChange($event)"
+            (focus)="onTickerInputFocus()"
+            (blur)="onTickerInputBlur()"
+            placeholder="Enter ticker (e.g. AAPL)"
+            autocomplete="off"
+          />
+          <div
+            class="ticker-dropdown"
+            *ngIf="tickerDropdownOpen && (tickerSuggestions.length || tickerSearchLoading)"
+          >
+            <div class="ticker-loading" *ngIf="tickerSearchLoading">Searching...</div>
+            <button
+              class="ticker-option"
+              type="button"
+              *ngFor="let item of tickerSuggestions"
+              (mousedown)="onSelectTickerSuggestion(item)"
+            >
+              <span class="ticker-symbol">{{ item.symbol }}</span>
+              <span class="ticker-desc">{{ item.description || item.exchange }}</span>
+              <span class="ticker-exchange">{{ item.exchange }}</span>
+            </button>
+            <div class="ticker-empty" *ngIf="!tickerSearchLoading && !tickerSuggestions.length">
+              No matches
+            </div>
+          </div>
+        </div>
+      </label>
+      <button class="primary" (click)="analyzeSentiment()" [disabled]="sentimentLoading || !sentimentTicker">
+        {{ sentimentLoading ? 'Analyzing...' : 'Analyze' }}
+      </button>
+    </div>
+    <div class="sentiment-status" *ngIf="sentimentError">{{ sentimentError }}</div>
+  </div>
+
+  <div class="sentiment-grid" *ngIf="(selectedMode === 'dashboard' || selectedMode === 'single') && sentimentData; else emptySentiment">
+    <div class="sentiment-card gauge-card">
+      <div class="sentiment-kicker">Signal Gauge</div>
+      <div class="gauge">
+        <svg viewBox="0 0 200 110" aria-hidden="true">
+          <path class="gauge-arc negative" d="M20,100 A80,80 0 0 1 80,20" />
+          <path class="gauge-arc neutral" d="M80,20 A80,80 0 0 1 120,20" />
+          <path class="gauge-arc positive" d="M120,20 A80,80 0 0 1 180,100" />
+        </svg>
+        <div
+          class="gauge-needle"
+          [class.positive]="gaugeLabel === 'Positive'"
+          [class.negative]="gaugeLabel === 'Negative'"
+          [class.neutral]="gaugeLabel === 'Neutral'"
+          [style.transform]="'translateX(-50%) rotate(' + gaugeAngle + 'deg)'"
+        >
+          <span></span>
+        </div>
+        <div
+          class="gauge-center"
+          [class.positive]="gaugeLabel === 'Positive'"
+          [class.negative]="gaugeLabel === 'Negative'"
+          [class.neutral]="gaugeLabel === 'Neutral'"
+        ></div>
+        <div
+          class="gauge-label"
+          [class.positive]="gaugeLabel === 'Positive'"
+          [class.negative]="gaugeLabel === 'Negative'"
+          [class.neutral]="gaugeLabel === 'Neutral'"
+        >
+          {{ gaugeLabel }}
+        </div>
+      </div>
+      <div class="gauge-meta">
+        <span>Score {{ sentimentScoreDisplay }}</span>
+        <span>Sources {{ sentimentData.sources_analyzed }}</span>
+      </div>
+    </div>
+
+    <div class="sentiment-card">
+      <div class="sentiment-kicker">Overall</div>
+      <div class="sentiment-score">
+        <span
+          class="sentiment-label"
+          [class.positive]="sentimentData.sentiment_label === 'Positive'"
+          [class.negative]="sentimentData.sentiment_label === 'Negative'"
+          [class.neutral]="sentimentData.sentiment_label === 'Neutral'"
+        >
+          {{ sentimentData.sentiment_label }}
+        </span>
+        <span class="sentiment-value">{{ sentimentScoreDisplay }}</span>
+      </div>
+      <div class="sentiment-meta">
+        <span>Sources: {{ sentimentData.sources_analyzed }}</span>
+        <span>Confidence: {{ sentimentData.confidence | number: '1.2-2' }}</span>
+      </div>
+      <div class="sentiment-meta" *ngIf="sentimentData.current_price !== null">
+        Current price: ${{ sentimentData.current_price | number: '1.2-2' }}
+      </div>
+    </div>
+
+    <div class="sentiment-card">
+      <div class="sentiment-kicker">Price Trend</div>
+      <svg viewBox="0 0 320 110" class="sentiment-chart" *ngIf="priceSeriesPath; else noPrice">
+        <line class="axis-line" x1="6" y1="6" x2="6" y2="104"></line>
+        <line class="axis-line" x1="6" y1="104" x2="314" y2="104"></line>
+        <line class="axis-tick" x1="6" y1="6" x2="10" y2="6"></line>
+        <line class="axis-tick" x1="6" y1="55" x2="10" y2="55"></line>
+        <line class="axis-tick" x1="6" y1="104" x2="10" y2="104"></line>
+        <text
+          class="axis-label"
+          *ngFor="let item of priceYAxisLabels"
+          x="14"
+          [attr.y]="item.y"
+        >
+          {{ item.label }}
+        </text>
+        <text
+          class="axis-label axis-x-label"
+          *ngFor="let item of priceXAxisLabels"
+          [attr.x]="item.x + 6"
+          y="108"
+        >
+          {{ item.label }}
+        </text>
+        <text class="axis-title" x="300" y="108">Time</text>
+        <text class="axis-title" x="2" y="10" transform="rotate(-90 2 10)">Price</text>
+        <path [attr.d]="priceSeriesPath" class="line"></path>
+      </svg>
+      <ng-template #noPrice>
+        <div class="empty">No price data available.</div>
+      </ng-template>
+    </div>
+
+    <div class="sentiment-card">
+      <div class="sentiment-kicker">Sentiment Trend</div>
+      <svg viewBox="0 0 320 110" class="sentiment-chart" *ngIf="sentimentSeriesPath; else noTrend">
+        <line class="axis-line" x1="6" y1="6" x2="6" y2="104"></line>
+        <line class="axis-line" x1="6" y1="104" x2="314" y2="104"></line>
+        <line class="axis-tick" x1="6" y1="6" x2="10" y2="6"></line>
+        <line class="axis-tick" x1="6" y1="55" x2="10" y2="55"></line>
+        <line class="axis-tick" x1="6" y1="104" x2="10" y2="104"></line>
+        <text class="axis-label" x="14" y="10">1.0</text>
+        <text class="axis-label" x="14" y="59">0.0</text>
+        <text class="axis-label" x="14" y="104">-1.0</text>
+        <text
+          class="axis-label axis-x-label"
+          *ngFor="let item of sentimentXAxisLabels"
+          [attr.x]="item.x + 6"
+          y="108"
+        >
+          {{ item.label }}
+        </text>
+        <text class="axis-title" x="300" y="108">Time</text>
+        <text class="axis-title" x="2" y="10" transform="rotate(-90 2 10)">Sentiment</text>
+        <path [attr.d]="sentimentSeriesPath" class="line"></path>
+      </svg>
+      <ng-template #noTrend>
+        <div class="empty">No sentiment history available.</div>
+      </ng-template>
+    </div>
+
+    <div class="sentiment-card">
+      <div class="sentiment-kicker">Distribution</div>
+      <div class="distribution" *ngIf="sentimentDistributionTotal; else noDist">
+        <div class="distribution-row">
+          <span>Positive</span>
+          <div class="bar">
+            <div
+              class="fill positive"
+              [style.width.%]="(sentimentData.distribution.positive / sentimentDistributionTotal) * 100"
+            ></div>
+          </div>
+          <span>{{ sentimentData.distribution.positive }}</span>
+        </div>
+        <div class="distribution-row">
+          <span>Neutral</span>
+          <div class="bar">
+            <div
+              class="fill neutral"
+              [style.width.%]="(sentimentData.distribution.neutral / sentimentDistributionTotal) * 100"
+            ></div>
+          </div>
+          <span>{{ sentimentData.distribution.neutral }}</span>
+        </div>
+        <div class="distribution-row">
+          <span>Negative</span>
+          <div class="bar">
+            <div
+              class="fill negative"
+              [style.width.%]="(sentimentData.distribution.negative / sentimentDistributionTotal) * 100"
+            ></div>
+          </div>
+          <span>{{ sentimentData.distribution.negative }}</span>
+        </div>
+      </div>
+      <ng-template #noDist>
+        <div class="empty">No sentiment distribution available.</div>
+      </ng-template>
+    </div>
+
+    <div class="sentiment-card sentiment-news">
+      <div class="sentiment-kicker">Recent News</div>
+      <div class="news-list">
+        <article class="news-item" *ngFor="let item of sentimentData.news">
+          <div>
+            <div class="news-title">{{ item.headline }}</div>
+            <div class="news-meta">
+              {{ item.source || 'Finnhub' }} | {{ item.datetime * 1000 | date: 'short' }}
+            </div>
+            <div class="news-summary" *ngIf="item.summary">{{ item.summary }}</div>
+          </div>
+          <span
+            class="sentiment-pill"
+            [class.positive]="item.sentiment_label === 'Positive'"
+            [class.negative]="item.sentiment_label === 'Negative'"
+          >
+            {{ item.sentiment_label }} {{ item.sentiment_score | number: '1.2-2' }}
+          </span>
+          <a class="chip" [href]="item.url" target="_blank" rel="noopener">Open</a>
+        </article>
+      </div>
+    </div>
+  </div>
+
+  <ng-template #emptySentiment>
+    <div class="empty" *ngIf="selectedMode === 'dashboard' || selectedMode === 'single'">
+      Select a ticker to start analysis. If no tickers are available,
+      enter one manually above.
+    </div>
+  </ng-template>
+
+  <section class="batch-panel" *ngIf="selectedMode === 'batch' || selectedMode === 'report'">
+    <div class="batch-header">
+      <div>
+        <h3>Market Batch Analysis</h3>
+        <p>Run sentiment across multiple tickers and compare scores.</p>
+      </div>
+      <div class="batch-actions">
+        <label>
+          Max tickers
+          <input type="number" min="1" max="20" [(ngModel)]="maxBatchSize" />
+        </label>
+        <button class="primary" (click)="runBatchAnalysis(false)" [disabled]="batchLoading">
+          {{ batchLoading ? 'Analyzing...' : 'Run Batch' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="sentiment-status" *ngIf="batchError">{{ batchError }}</div>
+
+    <div class="batch-stats" *ngIf="batchResults.length">
+      <div>
+        <div class="stat-label">Average Score</div>
+        <div class="stat-value">{{ batchAverageScore | number: '1.3-3' }}</div>
+      </div>
+      <div *ngIf="batchMostPositive">
+        <div class="stat-label">Most Positive</div>
+        <div class="stat-value">{{ batchMostPositive.ticker }}</div>
+      </div>
+      <div *ngIf="batchMostNegative">
+        <div class="stat-label">Most Negative</div>
+        <div class="stat-value">{{ batchMostNegative.ticker }}</div>
+      </div>
+    </div>
+
+    <div class="batch-chart" *ngIf="batchResults.length">
+      <div class="batch-row" *ngFor="let row of batchResults">
+        <div class="batch-ticker">{{ row.ticker }}</div>
+        <div class="batch-bar">
+          <div
+            class="batch-fill"
+            [class.positive]="row.score >= 0.25"
+            [class.negative]="row.score <= -0.25"
+            [style.width.%]="(row.score + 1) * 50"
+          ></div>
+        </div>
+        <div class="batch-score">{{ row.score | number: '1.3-3' }}</div>
+      </div>
+    </div>
+
+    <div class="batch-table" *ngIf="batchResults.length">
+      <div class="batch-table-head">
+        <span>Ticker</span>
+        <span>Label</span>
+        <span>Score</span>
+        <span>Price</span>
+      </div>
+      <div class="batch-table-row" *ngFor="let row of batchResults">
+        <span>{{ row.ticker }}</span>
+        <span>{{ row.label }}</span>
+        <span>{{ row.score | number: '1.3-3' }}</span>
+        <span>{{ row.price === null ? 'n/a' : ('$' + (row.price | number: '1.2-2')) }}</span>
+      </div>
+    </div>
+
+    <div class="report-panel" *ngIf="selectedMode === 'report'">
+      <div class="report-actions">
+        <button class="ghost" (click)="downloadReport()" [disabled]="!reportText">
+          Download Report
+        </button>
+      </div>
+      <pre class="report-box" *ngIf="reportText">{{ reportText }}</pre>
+    </div>
+  </section>
+
+  <section class="demo-panel" *ngIf="selectedMode === 'demo'">
+    <div>
+      <h3>Quick Demo</h3>
+      <p>Runs a short batch on a few tickers.</p>
+    </div>
+    <button class="primary" (click)="runBatchAnalysis(true)" [disabled]="batchLoading">
+      {{ batchLoading ? 'Analyzing...' : 'Run Demo' }}
+    </button>
+  </section>
+</section>
