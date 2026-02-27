@@ -5,6 +5,8 @@ import { firstValueFrom } from 'rxjs';
 
 import {
   ApiService,
+  PriceHistoryPoint,
+  SentimentHistoryPoint,
   SentimentAnalysisResponse,
   TickerSuggestion,
 } from '../../core/services/api.service';
@@ -43,6 +45,31 @@ export class NetSocialComponent implements OnInit {
   private batchRequestId = 0;
   private tickerSearchRequestId = 0;
   private tickerSearchTimer: number | undefined;
+
+  private readonly chartWidth = 320;
+  private readonly chartHeight = 110;
+  private readonly chartZoom: Record<'price' | 'sentiment', { start: number; end: number } | null> = {
+    price: null,
+    sentiment: null,
+  };
+  activeChartDialog: 'price' | 'sentiment' | null = null;
+  chartHover: Record<
+    'price' | 'sentiment',
+    | {
+        index: number;
+        x: number;
+        y: number;
+        label: string;
+        value: string;
+        boxX: number;
+        boxY: number;
+        boxWidth: number;
+      }
+    | null
+  > = {
+    price: null,
+    sentiment: null,
+  };
 
   readonly localWatchlists: Array<{
     id: number;
@@ -324,40 +351,202 @@ export class NetSocialComponent implements OnInit {
 
   get priceSeriesPath() {
     return this.buildLinePath(
-      this.sentimentData?.price_history ?? [],
-      (point) => point.close
+      this.getVisibleData('price', this.sentimentData?.price_history ?? []),
+      (point) => point.close,
+      this.chartWidth,
+      this.chartHeight
     );
   }
 
   get priceXAxisLabels() {
-    return this.buildXAxisLabels(this.sentimentData?.price_history ?? []);
+    return this.buildXAxisLabels(
+      this.getVisibleData('price', this.sentimentData?.price_history ?? []),
+      this.chartWidth
+    );
   }
 
   get priceYAxisLabels() {
-    return this.buildYAxisLabels(this.sentimentData?.price_history ?? [], (point) => point.close);
+    return this.buildYAxisLabels(
+      this.getVisibleData('price', this.sentimentData?.price_history ?? []),
+      (point) => point.close,
+      this.chartHeight
+    );
   }
 
   get sentimentSeriesPath() {
     return this.buildLinePath(
-      this.sentimentData?.sentiment_history ?? [],
-      (point) => point.score
+      this.getVisibleData('sentiment', this.sentimentData?.sentiment_history ?? []),
+      (point) => point.score,
+      this.chartWidth,
+      this.chartHeight
     );
   }
 
   get sentimentXAxisLabels() {
-    const history = this.sentimentData?.sentiment_history ?? [];
-    if (!history.length) return [] as Array<{ x: number; label: string }>;
+    return this.buildXAxisLabels(
+      this.getVisibleData('sentiment', this.sentimentData?.sentiment_history ?? []),
+      this.chartWidth
+    );
+  }
 
-    const lastIndex = history.length - 1;
-    const midIndex = Math.floor(lastIndex / 2);
-    const points = [0, midIndex, lastIndex];
-    const width = 320;
-    const step = width / Math.max(lastIndex, 1);
+  onChartHover(event: MouseEvent, kind: 'price' | 'sentiment') {
+    if (kind === 'price') {
+      const data = this.getChartData('price');
+      if (!data.length) return;
+      const points = this.buildChartPoints('price', data);
+      if (!points.length) return;
 
-    return points.map((index) => ({
-      x: index * step,
-      label: this.formatShortDate(history[index].date),
-    }));
+      const svg = event.currentTarget as SVGElement | null;
+      const rect = svg?.getBoundingClientRect();
+      if (!rect) return;
+      const localX = ((event.clientX - rect.left) / rect.width) * this.chartWidth;
+
+      const step = this.chartWidth / Math.max(points.length - 1, 1);
+      const index = Math.max(0, Math.min(points.length - 1, Math.round(localX / step)));
+      const point = points[index];
+      if (!point) return;
+
+      const valueText = `$${point.value.toFixed(2)}`;
+      const label = this.formatShortDate(point.date);
+      const labelText = `${label}`;
+      const valueLine = `${valueText}`;
+      const textLength = Math.max(labelText.length, valueLine.length);
+      const boxWidth = Math.max(64, textLength * 6 + 12);
+      const boxHeight = 28;
+      const offsetX = point.x > this.chartWidth * 0.65 ? -boxWidth - 8 : 8;
+      const boxX = Math.max(4, Math.min(this.chartWidth - boxWidth - 4, point.x + offsetX));
+      const boxY = Math.max(6, point.y - boxHeight - 8);
+
+      this.chartHover.price = {
+        index: point.rawIndex,
+        x: point.x,
+        y: point.y,
+        label: labelText,
+        value: valueLine,
+        boxX,
+        boxY,
+        boxWidth,
+      };
+      return;
+    }
+
+    const data = this.getChartData('sentiment');
+    if (!data.length) return;
+    const points = this.buildChartPoints('sentiment', data);
+    if (!points.length) return;
+
+    const svg = event.currentTarget as SVGElement | null;
+    const rect = svg?.getBoundingClientRect();
+    if (!rect) return;
+    const localX = ((event.clientX - rect.left) / rect.width) * this.chartWidth;
+
+    const step = this.chartWidth / Math.max(points.length - 1, 1);
+    const index = Math.max(0, Math.min(points.length - 1, Math.round(localX / step)));
+    const point = points[index];
+    if (!point) return;
+
+    const valueText = point.value.toFixed(3);
+    const label = this.formatShortDate(point.date);
+    const labelText = `${label}`;
+    const valueLine = `${valueText}`;
+    const textLength = Math.max(labelText.length, valueLine.length);
+    const boxWidth = Math.max(64, textLength * 6 + 12);
+    const boxHeight = 28;
+    const offsetX = point.x > this.chartWidth * 0.65 ? -boxWidth - 8 : 8;
+    const boxX = Math.max(4, Math.min(this.chartWidth - boxWidth - 4, point.x + offsetX));
+    const boxY = Math.max(6, point.y - boxHeight - 8);
+
+    this.chartHover.sentiment = {
+      index: point.rawIndex,
+      x: point.x,
+      y: point.y,
+      label: labelText,
+      value: valueLine,
+      boxX,
+      boxY,
+      boxWidth,
+    };
+  }
+
+  onChartLeave(kind: 'price' | 'sentiment') {
+    this.chartHover[kind] = null;
+  }
+
+  onChartDoubleClick(event: MouseEvent, kind: 'price' | 'sentiment') {
+    if (kind === 'price') {
+      const data = this.getChartData('price');
+      if (!data.length) return;
+
+      if (this.chartZoom.price) {
+        this.chartZoom.price = null;
+        this.chartHover.price = null;
+        return;
+      }
+
+      const points = this.buildChartPoints('price', data);
+      if (!points.length) return;
+
+      const svg = event.currentTarget as SVGElement | null;
+      const rect = svg?.getBoundingClientRect();
+      if (!rect) return;
+      const localX = ((event.clientX - rect.left) / rect.width) * this.chartWidth;
+      const step = this.chartWidth / Math.max(points.length - 1, 1);
+      const visibleIndex = Math.max(0, Math.min(points.length - 1, Math.round(localX / step)));
+      const rawIndex = points[visibleIndex].rawIndex;
+
+      const windowSize = Math.max(5, Math.floor(data.length * 0.35));
+      const half = Math.floor(windowSize / 2);
+      let start = Math.max(0, rawIndex - half);
+      let end = Math.min(data.length - 1, start + windowSize - 1);
+      start = Math.max(0, end - windowSize + 1);
+
+      this.chartZoom.price = { start, end };
+      this.onChartHover(event, 'price');
+      return;
+    }
+
+    const data = this.getChartData('sentiment');
+    if (!data.length) return;
+
+    if (this.chartZoom.sentiment) {
+      this.chartZoom.sentiment = null;
+      this.chartHover.sentiment = null;
+      return;
+    }
+
+    const points = this.buildChartPoints('sentiment', data);
+    if (!points.length) return;
+
+    const svg = event.currentTarget as SVGElement | null;
+    const rect = svg?.getBoundingClientRect();
+    if (!rect) return;
+    const localX = ((event.clientX - rect.left) / rect.width) * this.chartWidth;
+    const step = this.chartWidth / Math.max(points.length - 1, 1);
+    const visibleIndex = Math.max(0, Math.min(points.length - 1, Math.round(localX / step)));
+    const rawIndex = points[visibleIndex].rawIndex;
+
+    const windowSize = Math.max(5, Math.floor(data.length * 0.35));
+    const half = Math.floor(windowSize / 2);
+    let start = Math.max(0, rawIndex - half);
+    let end = Math.min(data.length - 1, start + windowSize - 1);
+    start = Math.max(0, end - windowSize + 1);
+
+    this.chartZoom.sentiment = { start, end };
+    this.onChartHover(event, 'sentiment');
+  }
+
+  onOpenChartDialog(kind: 'price' | 'sentiment') {
+    this.activeChartDialog = kind;
+    this.applyDefaultZoom(kind);
+    this.chartHover[kind] = null;
+  }
+
+  closeChartDialog() {
+    if (!this.activeChartDialog) return;
+    const kind = this.activeChartDialog;
+    this.chartZoom[kind] = null;
+    this.chartHover[kind] = null;
+    this.activeChartDialog = null;
   }
 
   private syncSentimentTicker() {
@@ -592,17 +781,69 @@ export class NetSocialComponent implements OnInit {
       blocks.push(this.renderDistributionBlock(sentimentData, 312, 300));
     }
     if (pricePoints.length) {
-      blocks.push(this.renderChartBlock('Price Trend', pricePoints, 72, 160));
+      const priceXLabels = this.buildXAxisLabels(sentimentData?.price_history ?? [], this.chartWidth);
+      const priceYLabels = this.buildYAxisLabels(
+        sentimentData?.price_history ?? [],
+        (point) => point.close,
+        this.chartHeight
+      );
+      blocks.push(
+        this.renderChartBlock(
+          'Price Trend',
+          pricePoints,
+          72,
+          160,
+          priceXLabels,
+          priceYLabels,
+          'Time',
+          'Price'
+        )
+      );
     }
     if (sentimentPoints.length) {
-      blocks.push(this.renderChartBlock('Sentiment Trend', sentimentPoints, 72, 20));
+      const sentimentXLabels = this.buildXAxisLabels(
+        sentimentData?.sentiment_history ?? [],
+        this.chartWidth
+      );
+      const sentimentYLabels = [
+        { y: 6, label: '1.0' },
+        { y: 55, label: '0.0' },
+        { y: 104, label: '-1.0' },
+      ];
+      blocks.push(
+        this.renderChartBlock(
+          'Sentiment Trend',
+          sentimentPoints,
+          72,
+          20,
+          sentimentXLabels,
+          sentimentYLabels,
+          'Time',
+          'Sentiment'
+        )
+      );
     }
     return blocks.join('\n');
   }
 
-  private renderChartBlock(title: string, points: Array<[number, number]>, x: number, y: number) {
+  private renderChartBlock(
+    title: string,
+    points: Array<[number, number]>,
+    x: number,
+    y: number,
+    xLabels: Array<{ x: number; label: string }>,
+    yLabels: Array<{ y: number; label: string }>,
+    xAxisTitle: string,
+    yAxisTitle: string
+  ) {
     const width = 468;
     const height = 110;
+    const xLabelY = y - 6;
+    const labelOffset = 8;
+    const yAxisTitleX = x - 36;
+    const yAxisTitleY = y + height - 8;
+    const xAxisTitleX = x + width - 20;
+    const xAxisTitleY = y - 18;
     const chart = [
       'q',
       '0.1 0.7 0.68 RG',
@@ -611,6 +852,23 @@ export class NetSocialComponent implements OnInit {
       '0.9 0.95 0.97 rg',
       '0 0 0 RG',
       `BT /F1 11 Tf ${x} ${y + height + 14} Td (${this.escapePdfText(title)}) Tj ET`,
+      'q',
+      '0 0 0 RG',
+      '/F1 9 Tf',
+      ...yLabels.map((label) => {
+        const labelY = y + height - (label.y / this.chartHeight) * height + 3;
+        const labelX = x - labelOffset;
+        return `BT ${labelX} ${labelY} Td (${this.escapePdfText(label.label)}) Tj ET`;
+      }),
+      ...xLabels.map((label) => {
+        const labelX = x + (label.x / this.chartWidth) * width;
+        return `BT ${labelX} ${xLabelY} Td (${this.escapePdfText(label.label)}) Tj ET`;
+      }),
+      `BT /F1 9 Tf ${xAxisTitleX} ${xAxisTitleY} Td (${this.escapePdfText(xAxisTitle)}) Tj ET`,
+      `q 1 0 0 1 ${yAxisTitleX} ${yAxisTitleY} cm 0 1 -1 0 0 0 cm BT /F1 9 Tf 0 0 Td (${this.escapePdfText(
+        yAxisTitle
+      )}) Tj ET Q`,
+      'Q',
       'q',
       '0 0 0 RG',
       '1.2 w',
@@ -826,6 +1084,88 @@ export class NetSocialComponent implements OnInit {
     return parsed.toLocaleDateString(undefined, {
       month: 'short',
       day: '2-digit',
+    });
+  }
+
+  private getChartData(kind: 'price'): PriceHistoryPoint[];
+  private getChartData(kind: 'sentiment'): SentimentHistoryPoint[];
+  private getChartData(kind: 'price' | 'sentiment') {
+    return kind === 'price'
+      ? this.sentimentData?.price_history ?? []
+      : this.sentimentData?.sentiment_history ?? [];
+  }
+
+  private getVisibleData<T>(kind: 'price' | 'sentiment', data: T[]) {
+    const zoom = this.chartZoom[kind];
+    if (!zoom) return data;
+    const start = Math.max(0, Math.min(zoom.start, data.length - 1));
+    const end = Math.max(start, Math.min(zoom.end, data.length - 1));
+    return data.slice(start, end + 1);
+  }
+
+  private applyDefaultZoom(kind: 'price' | 'sentiment') {
+    if (kind === 'price') {
+      const data = this.getChartData('price');
+      if (!data.length) return;
+      this.chartZoom.price = this.buildDefaultZoomWindow(data.length);
+      return;
+    }
+
+    const data = this.getChartData('sentiment');
+    if (!data.length) return;
+    this.chartZoom.sentiment = this.buildDefaultZoomWindow(data.length);
+  }
+
+  private buildDefaultZoomWindow(length: number) {
+    const windowSize = Math.max(5, Math.floor(length * 0.35));
+    const half = Math.floor(windowSize / 2);
+    const center = Math.floor(length / 2);
+    let start = Math.max(0, center - half);
+    let end = Math.min(length - 1, start + windowSize - 1);
+    start = Math.max(0, end - windowSize + 1);
+    return { start, end };
+  }
+
+  private buildChartPoints(
+    kind: 'price',
+    data: PriceHistoryPoint[]
+  ): Array<{ x: number; y: number; value: number; rawIndex: number; date: string }>;
+  private buildChartPoints(
+    kind: 'sentiment',
+    data: SentimentHistoryPoint[]
+  ): Array<{ x: number; y: number; value: number; rawIndex: number; date: string }>;
+  private buildChartPoints(
+    kind: 'price' | 'sentiment',
+    data: Array<PriceHistoryPoint | SentimentHistoryPoint>
+  ) {
+    const selector = (point: any) => (kind === 'price' ? point.close : point.score);
+    const zoom = this.chartZoom[kind];
+    const start = zoom ? Math.max(0, Math.min(zoom.start, data.length - 1)) : 0;
+    const end = zoom ? Math.max(start, Math.min(zoom.end, data.length - 1)) : data.length - 1;
+    const visible = data.slice(start, end + 1) as Array<{ date: string }>;
+    if (!visible.length) return [] as Array<{ x: number; y: number; value: number; rawIndex: number; date: string }>;
+
+    const values = visible
+      .map((point) => Number(selector(point)))
+      .filter((value) => Number.isFinite(value));
+    if (!values.length) return [] as Array<{ x: number; y: number; value: number; rawIndex: number; date: string }>;
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+    const step = this.chartWidth / Math.max(visible.length - 1, 1);
+
+    return visible.map((point: any, index) => {
+      const value = Number(selector(point));
+      const x = index * step;
+      const y = this.chartHeight - ((value - min) / range) * this.chartHeight;
+      return {
+        x,
+        y,
+        value,
+        rawIndex: start + index,
+        date: point.date,
+      };
     });
   }
 }

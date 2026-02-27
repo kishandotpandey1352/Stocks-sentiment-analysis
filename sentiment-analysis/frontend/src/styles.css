@@ -27,6 +27,24 @@ body {
     linear-gradient(180deg, #0a1218 0%, #0d1822 45%, #0a1117 100%);
   min-height: 100vh;
   position: relative;
+  transition: background 0.4s ease;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(27, 183, 166, 0.18), transparent 55%),
+    radial-gradient(circle at 85% 15%, rgba(100, 224, 212, 0.12), transparent 55%);
+  transition: opacity 0.35s ease;
+  z-index: 0;
+}
+
+body:hover::after {
+  opacity: 1;
 }
 
 body::before {

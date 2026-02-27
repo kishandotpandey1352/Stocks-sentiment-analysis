@@ -150,8 +150,24 @@
     </div>
 
     <div class="sentiment-card">
-      <div class="sentiment-kicker">Price Trend</div>
-      <svg viewBox="0 0 320 110" class="sentiment-chart" *ngIf="priceSeriesPath; else noPrice">
+      <div class="card-header">
+        <div class="sentiment-kicker">Price Trend</div>
+        <button
+          class="chart-zoom-btn"
+          type="button"
+          (click)="onOpenChartDialog('price')"
+        >
+          Zoom
+        </button>
+      </div>
+      <svg
+        viewBox="0 0 320 110"
+        class="sentiment-chart"
+        *ngIf="priceSeriesPath; else noPrice"
+        (mousemove)="onChartHover($event, 'price')"
+        (mouseleave)="onChartLeave('price')"
+        (dblclick)="onChartDoubleClick($event, 'price')"
+      >
         <line class="axis-line" x1="6" y1="6" x2="6" y2="104"></line>
         <line class="axis-line" x1="6" y1="104" x2="314" y2="104"></line>
         <line class="axis-tick" x1="6" y1="6" x2="10" y2="6"></line>
@@ -176,6 +192,25 @@
         <text class="axis-title" x="300" y="108">Time</text>
         <text class="axis-title" x="2" y="10" transform="rotate(-90 2 10)">Price</text>
         <path [attr.d]="priceSeriesPath" class="line"></path>
+        <g *ngIf="chartHover.price as hover">
+          <line class="chart-hover-line" [attr.x1]="hover.x" y1="6" [attr.x2]="hover.x" y2="104"></line>
+          <circle class="chart-hover-point" [attr.cx]="hover.x" [attr.cy]="hover.y" r="3"></circle>
+          <g class="chart-tooltip">
+            <rect
+              class="chart-tooltip-bg"
+              [attr.x]="hover.boxX"
+              [attr.y]="hover.boxY"
+              [attr.width]="hover.boxWidth"
+              height="28"
+              rx="6"
+              ry="6"
+            ></rect>
+            <text class="chart-tooltip-text" [attr.x]="hover.boxX + 6" [attr.y]="hover.boxY + 11">
+              <tspan>{{ hover.label }}</tspan>
+              <tspan [attr.x]="hover.boxX + 6" [attr.y]="hover.boxY + 23">{{ hover.value }}</tspan>
+            </text>
+          </g>
+        </g>
       </svg>
       <ng-template #noPrice>
         <div class="empty">No price data available.</div>
@@ -183,8 +218,24 @@
     </div>
 
     <div class="sentiment-card">
-      <div class="sentiment-kicker">Sentiment Trend</div>
-      <svg viewBox="0 0 320 110" class="sentiment-chart" *ngIf="sentimentSeriesPath; else noTrend">
+      <div class="card-header">
+        <div class="sentiment-kicker">Sentiment Trend</div>
+        <button
+          class="chart-zoom-btn"
+          type="button"
+          (click)="onOpenChartDialog('sentiment')"
+        >
+          Zoom
+        </button>
+      </div>
+      <svg
+        viewBox="0 0 320 110"
+        class="sentiment-chart"
+        *ngIf="sentimentSeriesPath; else noTrend"
+        (mousemove)="onChartHover($event, 'sentiment')"
+        (mouseleave)="onChartLeave('sentiment')"
+        (dblclick)="onChartDoubleClick($event, 'sentiment')"
+      >
         <line class="axis-line" x1="6" y1="6" x2="6" y2="104"></line>
         <line class="axis-line" x1="6" y1="104" x2="314" y2="104"></line>
         <line class="axis-tick" x1="6" y1="6" x2="10" y2="6"></line>
@@ -204,6 +255,25 @@
         <text class="axis-title" x="300" y="108">Time</text>
         <text class="axis-title" x="2" y="10" transform="rotate(-90 2 10)">Sentiment</text>
         <path [attr.d]="sentimentSeriesPath" class="line"></path>
+        <g *ngIf="chartHover.sentiment as hover">
+          <line class="chart-hover-line" [attr.x1]="hover.x" y1="6" [attr.x2]="hover.x" y2="104"></line>
+          <circle class="chart-hover-point" [attr.cx]="hover.x" [attr.cy]="hover.y" r="3"></circle>
+          <g class="chart-tooltip">
+            <rect
+              class="chart-tooltip-bg"
+              [attr.x]="hover.boxX"
+              [attr.y]="hover.boxY"
+              [attr.width]="hover.boxWidth"
+              height="28"
+              rx="6"
+              ry="6"
+            ></rect>
+            <text class="chart-tooltip-text" [attr.x]="hover.boxX + 6" [attr.y]="hover.boxY + 11">
+              <tspan>{{ hover.label }}</tspan>
+              <tspan [attr.x]="hover.boxX + 6" [attr.y]="hover.boxY + 23">{{ hover.value }}</tspan>
+            </text>
+          </g>
+        </g>
       </svg>
       <ng-template #noTrend>
         <div class="empty">No sentiment history available.</div>
@@ -279,6 +349,134 @@
       enter one manually above.
     </div>
   </ng-template>
+
+  <div
+    class="chart-dialog-backdrop"
+    *ngIf="activeChartDialog as dialog"
+    (click)="closeChartDialog()"
+  >
+    <div class="chart-dialog" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+      <div class="chart-dialog-header">
+        <div class="chart-dialog-title">
+          {{ dialog === 'price' ? 'Price Trend' : 'Sentiment Trend' }}
+        </div>
+        <button class="chart-dialog-close" type="button" (click)="closeChartDialog()">
+          Close
+        </button>
+      </div>
+
+      <ng-container *ngIf="dialog === 'price'">
+        <svg
+          viewBox="0 0 320 110"
+          class="sentiment-chart dialog-chart"
+          *ngIf="priceSeriesPath; else noPriceDialog"
+          (mousemove)="onChartHover($event, 'price')"
+          (mouseleave)="onChartLeave('price')"
+          (dblclick)="onChartDoubleClick($event, 'price')"
+        >
+          <line class="axis-line" x1="6" y1="6" x2="6" y2="104"></line>
+          <line class="axis-line" x1="6" y1="104" x2="314" y2="104"></line>
+          <line class="axis-tick" x1="6" y1="6" x2="10" y2="6"></line>
+          <line class="axis-tick" x1="6" y1="55" x2="10" y2="55"></line>
+          <line class="axis-tick" x1="6" y1="104" x2="10" y2="104"></line>
+          <text
+            class="axis-label"
+            *ngFor="let item of priceYAxisLabels"
+            x="14"
+            [attr.y]="item.y"
+          >
+            {{ item.label }}
+          </text>
+          <text
+            class="axis-label axis-x-label"
+            *ngFor="let item of priceXAxisLabels"
+            [attr.x]="item.x + 6"
+            y="108"
+          >
+            {{ item.label }}
+          </text>
+          <text class="axis-title" x="300" y="108">Time</text>
+          <text class="axis-title" x="2" y="10" transform="rotate(-90 2 10)">Price</text>
+          <path [attr.d]="priceSeriesPath" class="line"></path>
+          <g *ngIf="chartHover.price as hover">
+            <line class="chart-hover-line" [attr.x1]="hover.x" y1="6" [attr.x2]="hover.x" y2="104"></line>
+            <circle class="chart-hover-point" [attr.cx]="hover.x" [attr.cy]="hover.y" r="3"></circle>
+            <g class="chart-tooltip">
+              <rect
+                class="chart-tooltip-bg"
+                [attr.x]="hover.boxX"
+                [attr.y]="hover.boxY"
+                [attr.width]="hover.boxWidth"
+                height="28"
+                rx="6"
+                ry="6"
+              ></rect>
+              <text class="chart-tooltip-text" [attr.x]="hover.boxX + 6" [attr.y]="hover.boxY + 11">
+                <tspan>{{ hover.label }}</tspan>
+                <tspan [attr.x]="hover.boxX + 6" [attr.y]="hover.boxY + 23">{{ hover.value }}</tspan>
+              </text>
+            </g>
+          </g>
+        </svg>
+        <ng-template #noPriceDialog>
+          <div class="empty">No price data available.</div>
+        </ng-template>
+      </ng-container>
+
+      <ng-container *ngIf="dialog === 'sentiment'">
+        <svg
+          viewBox="0 0 320 110"
+          class="sentiment-chart dialog-chart"
+          *ngIf="sentimentSeriesPath; else noTrendDialog"
+          (mousemove)="onChartHover($event, 'sentiment')"
+          (mouseleave)="onChartLeave('sentiment')"
+          (dblclick)="onChartDoubleClick($event, 'sentiment')"
+        >
+          <line class="axis-line" x1="6" y1="6" x2="6" y2="104"></line>
+          <line class="axis-line" x1="6" y1="104" x2="314" y2="104"></line>
+          <line class="axis-tick" x1="6" y1="6" x2="10" y2="6"></line>
+          <line class="axis-tick" x1="6" y1="55" x2="10" y2="55"></line>
+          <line class="axis-tick" x1="6" y1="104" x2="10" y2="104"></line>
+          <text class="axis-label" x="14" y="10">1.0</text>
+          <text class="axis-label" x="14" y="59">0.0</text>
+          <text class="axis-label" x="14" y="104">-1.0</text>
+          <text
+            class="axis-label axis-x-label"
+            *ngFor="let item of sentimentXAxisLabels"
+            [attr.x]="item.x + 6"
+            y="108"
+          >
+            {{ item.label }}
+          </text>
+          <text class="axis-title" x="300" y="108">Time</text>
+          <text class="axis-title" x="2" y="10" transform="rotate(-90 2 10)">Sentiment</text>
+          <path [attr.d]="sentimentSeriesPath" class="line"></path>
+          <g *ngIf="chartHover.sentiment as hover">
+            <line class="chart-hover-line" [attr.x1]="hover.x" y1="6" [attr.x2]="hover.x" y2="104"></line>
+            <circle class="chart-hover-point" [attr.cx]="hover.x" [attr.cy]="hover.y" r="3"></circle>
+            <g class="chart-tooltip">
+              <rect
+                class="chart-tooltip-bg"
+                [attr.x]="hover.boxX"
+                [attr.y]="hover.boxY"
+                [attr.width]="hover.boxWidth"
+                height="28"
+                rx="6"
+                ry="6"
+              ></rect>
+              <text class="chart-tooltip-text" [attr.x]="hover.boxX + 6" [attr.y]="hover.boxY + 11">
+                <tspan>{{ hover.label }}</tspan>
+                <tspan [attr.x]="hover.boxX + 6" [attr.y]="hover.boxY + 23">{{ hover.value }}</tspan>
+              </text>
+            </g>
+          </g>
+        </svg>
+        <ng-template #noTrendDialog>
+          <div class="empty">No sentiment history available.</div>
+        </ng-template>
+      </ng-container>
+    </div>
+  </div>
 
   <section class="batch-panel" *ngIf="selectedMode === 'batch' || selectedMode === 'report'">
     <div class="batch-header">
