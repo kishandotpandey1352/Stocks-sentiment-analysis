@@ -94,3 +94,36 @@ docker compose up --build
 Re-run:
 docker compose down
 docker compose up --build
+
+## Deployment of the backend:
+Here’s a clean step‑by‑step for deploying your FastAPI backend to Fly.io.
+
+1) Install and login
+
+Install flyctl: https://fly.io/docs/flyctl/install/
+Login: fly auth login
+2) From your backend folder
+Go to:
+
+3) Launch the app
+
+During the prompt:
+
+Pick an app name
+Pick a region
+Say yes to create the config
+4) Make sure the app listens on 0.0.0.0:8000
+Your Dockerfile should run something like:
+
+5) Set secrets (API keys, etc.)
+
+6) Ensure Fly knows the internal port
+Edit fly.toml if needed:
+
+7) Deploy
+
+8) Confirm it’s live
+
+Then hit:
+
+If you want, paste your backend Dockerfile (or the command it runs) and I’ll verify the exact Fly config/port settings for you.
