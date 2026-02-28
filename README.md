@@ -126,7 +126,6 @@ Edit fly.toml if needed:
 
 Then hit:
 
-If you want, paste your backend Dockerfile (or the command it runs) and I’ll verify the exact Fly config/port settings for you.
 
 ## Deploy the frontend:
 
@@ -154,4 +153,3 @@ Then commit and redeploy.
 5) Deploy
 Click Deploy in Vercel. It will build and publish.
 
-If you want, tell me your Angular project name (from angular.json) and I’ll give you the exact dist/ path.
