@@ -127,3 +127,31 @@ Edit fly.toml if needed:
 Then hit:
 
 If you want, paste your backend Dockerfile (or the command it runs) and I’ll verify the exact Fly config/port settings for you.
+
+## Deploy the frontend:
+
+Here’s the quickest way to deploy your Angular frontend to Vercel.
+
+1) Push to GitHub
+Vercel needs a repo to deploy from.
+
+2) Create a Vercel project
+
+Go to https://vercel.com/new
+Import your repo
+3) Configure the project
+
+Root Directory: frontend
+Framework Preset: Angular
+Build Command: npm run build
+Output Directory: dist/<your-angular-project-name>
+Check angular.json → projects → <name> → architect → build → options → outputPath
+4) Point frontend to your Fly.io API
+Update environment.ts to use:
+
+Then commit and redeploy.
+
+5) Deploy
+Click Deploy in Vercel. It will build and publish.
+
+If you want, tell me your Angular project name (from angular.json) and I’ll give you the exact dist/ path.
